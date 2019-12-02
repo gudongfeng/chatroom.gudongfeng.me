@@ -33,8 +33,8 @@ Resources:
               - "dynamodb:Query"
               - "dynamodb:UpdateItem"
             Resource:
-              - "arn:aws:dynamodb:*:*:table/QuizBizQuestion"
-              - "arn:aws:dynamodb:*:*:table/QuizBizQuestion/*"
+              - "arn:aws:dynamodb:*:*:table/AppSyncQuizTable"
+              - "arn:aws:dynamodb:*:*:table/AppSyncQuizTable/*"
       Roles:
         - Ref: "AppSyncServiceRole"
   AppSyncGraphQLAPI:
@@ -92,6 +92,57 @@ Resources:
       DynamoDBConfig:
         TableName: !Ref DDBQuizTable
         AwsRegion: !Ref 'AWS::Region'
+  AppSyncDDBListQuestionsQueryResolver:
+    Type: 'AWS::AppSync::Resolver'
+    Properties:
+      ApiId: !GetAtt AppSyncGraphQLAPI.ApiId
+      TypeName: 'Query'
+      FieldName: 'listQuestions'
+      DataSourceName: !GetAtt AppSyncGraphQLDataSource.Name
+      RequestMappingTemplate: |
+        {
+            "version" : "2017-02-28",
+            "operation" : "Scan",
+            "limit": $util.defaultIfNull(${ctx.args.limit}, 20),
+            "nextToken": $util.toJson($util.defaultIfNullOrBlank($ctx.args.nextToken, null))
+        }
+      ResponseMappingTemplate: |
+        $utils.toJson($context.result)
+  AppSyncDDBGetQuestionQueryResolver:
+    Type: 'AWS::AppSync::Resolver'
+    Properties:
+      ApiId: !GetAtt AppSyncGraphQLAPI.ApiId
+      TypeName: 'Query'
+      FieldName: 'getQuestion'
+      DataSourceName: !GetAtt AppSyncGraphQLDataSource.Name
+      RequestMappingTemplate: |
+        {
+            "version": "2017-02-28",
+            "operation": "GetItem",
+            "key": {
+                "id": $util.dynamodb.toDynamoDBJson($ctx.args.id),
+            }
+        }
+      ResponseMappingTemplate: |
+        $utils.toJson($context.result)
+  AppSyncDDBCreateQuestionMutationResolver:
+    Type: 'AWS::AppSync::Resolver'
+    Properties:
+      ApiId: !GetAtt AppSyncGraphQLAPI.ApiId
+      TypeName: 'Mutation'
+      FieldName: 'createQuestion'
+      DataSourceName: !GetAtt AppSyncGraphQLDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version" : "2017-02-28",
+          "operation" : "PutItem",
+          "key": {
+              "id": $util.dynamodb.toDynamoDBJson($util.autoId()),
+          },
+          "attributeValues" : $util.dynamodb.toMapValuesJson($ctx.args.input)
+        }
+      ResponseMappingTemplate: |
+        $utils.toJson($context.result)
   DDBQuizTable: 
     Type: 'AWS::DynamoDB::Table'
     Properties:
